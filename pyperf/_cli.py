@@ -1,3 +1,9 @@
+import argparse
+from collections.abc import Generator
+from typing import TextIO
+from typing import Any
+from collections.abc import Sequence
+from _metadata import MetadataType
 import contextlib
 import errno
 import os.path
@@ -6,14 +12,15 @@ import sys
 from pyperf._formatter import (format_seconds, format_number,
                                format_datetime)
 from pyperf._metadata import format_metadata as _format_metadata
+from pyperf._bench import Benchmark, Run
 
 
-def empty_line(lines):
+def empty_line(lines: list[str]) -> None:
     if lines:
         lines.append('')
 
 
-def format_title(title, level=1, lines=None):
+def format_title(title: str, level: int=1, lines: list[str] | None=None) -> list[str]:
     if lines is None:
         lines = []
 
@@ -28,13 +35,13 @@ def format_title(title, level=1, lines=None):
     return lines
 
 
-def display_title(title, level=1):
+def display_title(title: str, level: int=1) -> None:
     for line in format_title(title, level):
         print(line)
     print()
 
 
-def format_metadata(metadata, prefix='- ', lines=None):
+def format_metadata(metadata: MetadataType, prefix: str = '- ', lines: list[str] | None = None) -> list[str]:
     if lines is None:
         lines = []
     for name, value in sorted(metadata.items()):
@@ -43,7 +50,7 @@ def format_metadata(metadata, prefix='- ', lines=None):
     return lines
 
 
-def _format_values_diff(bench, values, raw, total_loops):
+def _format_values_diff(bench: Benchmark, values: Sequence[float], raw: bool, total_loops: float) -> list[str]:
     values_str = [bench.format_value(value) for value in values]
     mean = bench.mean()
     max_delta = mean * 0.05
@@ -56,8 +63,8 @@ def _format_values_diff(bench, values, raw, total_loops):
     return values_str
 
 
-def format_run(bench, run_index, run, common_metadata=None, raw=False,
-               verbose=0, lines=None):
+def format_run(bench: Benchmark, run_index: int, run: Run, common_metadata: MetadataType | None=None, raw: bool = False,
+               verbose: int = 0, lines: list[str] | None = None) -> list[str]:
     if lines is None:
         lines = []
 
@@ -158,18 +165,18 @@ def format_run(bench, run_index, run, common_metadata=None, raw=False,
     return lines
 
 
-def _format_runs(bench, quiet=False, verbose=False, raw=False, lines=None):
+def _format_runs(bench: Benchmark, quiet: bool = False, verbose: bool = False, raw: bool = False, lines: list[str] | None = None) -> list[str]:
     runs = bench.get_runs()
     if quiet:
-        verbose = -1
+        verbose_level = -1
     elif verbose:
-        verbose = 1
+        verbose_level = 1
     else:
-        verbose = 0
+        verbose_level = 0
 
     if lines is None:
         lines = []
-    if verbose > 0:
+    if verbose_level > 0:
         empty_line(lines)
 
         # FIXME: display metadata in format_benchmark()
@@ -188,7 +195,7 @@ def _format_runs(bench, quiet=False, verbose=False, raw=False, lines=None):
             empty_line(lines)
         format_run(bench, run_index, run,
                    common_metadata=common_metadata,
-                   verbose=verbose, raw=raw, lines=lines)
+                   verbose=verbose_level, raw=raw, lines=lines)
 
     return lines
 
@@ -196,7 +203,7 @@ def _format_runs(bench, quiet=False, verbose=False, raw=False, lines=None):
 PERCENTILE_NAMES = {0: 'minimum', 25: 'Q1', 50: 'median', 75: 'Q3', 100: 'maximum'}
 
 
-def format_stats(bench, lines):
+def format_stats(bench: Benchmark, lines: list[str]) -> list[str]:
     fmt = bench.format_value
     values = bench.get_values()
 
@@ -302,7 +309,7 @@ def format_stats(bench, lines):
         lines.append("%s %s" % (key, value))
     lines.append('')
 
-    def format_limit(mean, value):
+    def format_limit(mean: float, value: float) -> str:
         return ("%s (%+.0f%% of the mean)"
                 % (fmt(value), (value - mean) * 100.0 / mean))
 
@@ -331,8 +338,8 @@ def format_stats(bench, lines):
     return lines
 
 
-def format_histogram(benchmarks, bins=20, extend=False, lines=None,
-                     checks=False):
+def format_histogram(benchmarks: Sequence[tuple[Benchmark, str | None]], bins: int = 20, extend: bool = False, lines: list[str] | None = None,
+                     checks: bool = False) -> list[str]:
     import collections
     import shutil
 
@@ -355,7 +362,7 @@ def format_histogram(benchmarks, bins=20, extend=False, lines=None,
     if not value_k:
         value_k = 1.0
 
-    def value_bucket(value):
+    def value_bucket(value: float) -> int:
         # round towards zero (ROUND_DOWN)
         return int(value / value_k)
 
@@ -400,7 +407,7 @@ def format_histogram(benchmarks, bins=20, extend=False, lines=None,
     return lines
 
 
-def format_checks(bench, lines=None, check_too_many_processes=False):
+def format_checks(bench: Benchmark, lines: list[str] | None = None, check_too_many_processes: bool = False) -> list[str]:
     if lines is None:
         lines = []
 
@@ -410,7 +417,7 @@ def format_checks(bench, lines=None, check_too_many_processes=False):
 
     values = bench.get_values()
     mean = bench.mean()
-    warnings = []
+    warnings: list[str] = []
     warn = warnings.append
     required_nprocesses = None
 
@@ -496,7 +503,7 @@ def format_checks(bench, lines=None, check_too_many_processes=False):
     return lines
 
 
-def _format_result_value(bench):
+def _format_result_value(bench: Benchmark) -> str:
     mean = bench.mean()
     if bench.get_nvalue() >= 2:
         args = bench.format_values((mean, bench.stdev()))
@@ -505,7 +512,7 @@ def _format_result_value(bench):
         return bench.format_value(mean)
 
 
-def format_result_value(bench):
+def format_result_value(bench: Benchmark) -> str:
     loops = None
     warmups = None
     for run in bench._runs:
@@ -535,7 +542,7 @@ def format_result_value(bench):
     return _format_result_value(bench)
 
 
-def format_result(bench):
+def format_result(bench: Benchmark) -> str:
     loops = None
     warmups = None
     for run in bench._runs:
@@ -569,9 +576,9 @@ def format_result(bench):
         return text
 
 
-def format_benchmark(bench, checks=True, metadata=False,
-                     dump=False, stats=False, hist=False, show_name=False,
-                     result=True, display_runs_args=None, only_checks=False):
+def format_benchmark(bench: Benchmark, checks: bool = True, metadata: bool = False,
+                     dump: bool = False, stats: bool = False, hist: bool = False, show_name: bool = False,
+                     result: bool = True, display_runs_args: dict[str, Any] | None = None, only_checks: bool = False) -> list[str]:
     lines = []
 
     if metadata:
@@ -605,12 +612,12 @@ def format_benchmark(bench, checks=True, metadata=False,
 
 
 # FIXME: remove this function?
-def multiline_output(args):
+def multiline_output(args: argparse.Namespace):
     return (args.hist or args.stats or args.dump or args.metadata)
 
 
 @contextlib.contextmanager
-def catch_broken_pipe_error(file=None):
+def catch_broken_pipe_error(file: TextIO | None = None) -> Generator[None]:
     if file is None:
         files = [sys.stdout, sys.stderr]
     else:
