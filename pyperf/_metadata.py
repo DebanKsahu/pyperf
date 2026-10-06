@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import cast
 from typing import overload
@@ -12,7 +13,7 @@ from pyperf._formatter import (format_number, format_seconds, format_filesize,
 
 METADATA_VALUE_TYPES = (int, str, float)
 MetadataValueType = int | str | float | list[str]
-MetadataType = dict[str, MetadataValueType]
+MetadataType = Mapping[str, MetadataValueType]
 NUMBER_TYPES = (int, float)
 
 
