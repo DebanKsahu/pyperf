@@ -111,6 +111,7 @@ METADATA: dict[str, MetadataInfoType] = {
     'date': DATETIME,
     'boot_time': DATETIME,
 
+    'calibrate_loops': LOOPS,
     'recalibrate_loops': LOOPS,
     'calibrate_warmups': WARMUPS,
     'recalibrate_warmups': WARMUPS,
