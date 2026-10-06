@@ -3,7 +3,6 @@ from collections.abc import Generator
 from typing import TextIO
 from typing import Any
 from collections.abc import Sequence
-from _metadata import MetadataType
 import contextlib
 import errno
 import os.path
@@ -11,7 +10,7 @@ import sys
 
 from pyperf._formatter import (format_seconds, format_number,
                                format_datetime)
-from pyperf._metadata import format_metadata as _format_metadata
+from pyperf._metadata import format_metadata as _format_metadata, MetadataType
 from pyperf._bench import Benchmark, Run
 
 
