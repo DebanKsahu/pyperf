@@ -67,7 +67,7 @@ def format_seconds(seconds: float | None) -> str:
     return ' '.join(parts)
 
 
-def format_number(number: int, unit: str | None = None, units: str | None = None) -> str:
+def format_number(number: int | float, unit: str | None = None, units: str | None = None) -> str:
     plural = (not number or abs(number) > 1)
     str_number = str(number)
     if number >= 10000:
@@ -81,9 +81,8 @@ def format_number(number: int, unit: str | None = None, units: str | None = None
         if not r:
             str_number = '10^%s' % pow10
 
-    if str_number == str(number) and number > 8192:
-        if number & (number-1) == 0:
-            str_number = '2^%s' % (number.bit_length() - 1)
+    if number > 8192 and isinstance(number, int) and number & (number-1) == 0:
+        str_number = '2^%s' % (number.bit_length() - 1)
 
     if not unit:
         return str_number
