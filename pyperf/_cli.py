@@ -1,4 +1,4 @@
-import argparse
+from typing import cast
 from collections.abc import Generator
 from typing import TextIO
 from typing import Any
@@ -114,52 +114,55 @@ def format_run(bench: Benchmark, run_index: int, run: Run, common_metadata: Meta
 
         total_loops = run.get_total_loops()
 
-        values = run.values
+        numbers: Sequence[float | int] = run.values
+        warmup_texts: list[str]
         if raw:
-            warmups = [bench.format_value(value * (loops * inner_loops))
+            warmup_texts = [bench.format_value(value * (loops * inner_loops))
                        for loops, value in run.warmups]
-            values = [value * total_loops for value in values]
+            numbers = [value * total_loops for value in numbers]
+        elif run.warmups:
+            warmup_numbers = [value for loops, value in run.warmups]
+            warmup_texts = _format_values_diff(bench, warmup_numbers, raw, total_loops)
         else:
-            warmups = run.warmups
-            if warmups:
-                warmups = [value for loops, value in warmups]
-                warmups = _format_values_diff(bench, warmups, raw, total_loops)
-        values = _format_values_diff(bench, values, raw, total_loops)
+            warmup_texts = []
+
+
+        value_texts = _format_values_diff(bench, numbers, raw, total_loops)
 
         if verbose >= 0:
             loops = run.get_loops()
             lines.append("Run %s: %s, %s, %s"
                          % (run_index,
-                            format_number(len(warmups), 'warmup'),
-                            format_number(len(values), 'value'),
+                            format_number(len(warmup_texts), 'warmup'),
+                            format_number(len(value_texts), 'value'),
                             format_number(loops, 'loop')))
         else:
             lines.append("Run %s:" % run_index)
 
-        if warmups and show_warmup:
+        if warmup_texts and show_warmup:
             if raw:
                 name = 'raw warmup'
             else:
                 name = 'warmup'
-            for index, warmup in enumerate(warmups, 1):
-                lines.append('- %s %s: %s' % (name, index, warmup))
+            for index, warmup_text in enumerate(warmup_texts, 1):
+                lines.append('- %s %s: %s' % (name, index, warmup_text))
 
         if raw:
             name = 'raw value'
         else:
             name = 'value'
-        for index, value in enumerate(values, 1):
-            lines.append('- %s %s: %s' % (name, index, value))
+        for index, value_text in enumerate(value_texts, 1):
+            lines.append('- %s %s: %s' % (name, index, value_text))
 
     if verbose > 0:
         metadata = run.get_metadata()
         if metadata:
             lines.append('- Metadata:')
-            for name, value in sorted(metadata.items()):
+            for name, metadata_value in sorted(metadata.items()):
                 if common_metadata and name in common_metadata:
                     continue
-                value = _format_metadata(name, value)
-                lines.append('  %s: %s' % (name, value))
+                metadata_value_str = _format_metadata(name, metadata_value)
+                lines.append('  %s: %s' % (name, metadata_value_str))
 
     return lines
 
@@ -262,16 +265,16 @@ def format_stats(bench: Benchmark, lines: list[str]) -> list[str]:
 
     if not (isinstance(inner_loops, int) and inner_loops == 1):
         if isinstance(loops, int):
-            loops = format_number(loops, 'outer-loop')
+            loops_str = format_number(loops, 'outer-loop')
         else:
-            loops = '%.1f outer-loops (average)'
+            loops_str = '%.1f outer-loops (average)'
 
         if isinstance(inner_loops, int):
-            inner_loops = format_number(inner_loops, 'inner-loop')
+            inner_loops_str = format_number(inner_loops, 'inner-loop')
         else:
-            inner_loops = "%.1f inner-loops (average)" % inner_loops
+            inner_loops_str = "%.1f inner-loops (average)" % inner_loops
 
-        text = '%s (%s x %s)' % (text, loops, inner_loops)
+        text = '%s (%s x %s)' % (text, loops_str, inner_loops_str)
 
     lines.append("Loop iterations per value: %s" % text)
     lines.append("Total number of values: %s" % format_number(nvalue))
@@ -352,7 +355,7 @@ def format_histogram(benchmarks: Sequence[tuple[Benchmark, str | None]], bins: i
         if not extend:
             bins = min(bins, 25)
 
-    all_values = []
+    all_values: list[float | int] = []
     for bench, title in benchmarks:
         all_values.extend(bench.get_values())
     all_min = min(all_values)
@@ -394,7 +397,7 @@ def format_histogram(benchmarks: Sequence[tuple[Benchmark, str | None]], bins: i
         line_k = float(width) / max(counter.values())
         for bucket in range(bucket_min, bucket_max + 1):
             count = counter.get(bucket, 0)
-            linelen = int(round(count * line_k))
+            linelen = round(count * line_k)
             text = bench.format_value(bucket * value_k)
             line = ('#' * linelen) or '|'
             lines.append("{:>{}}: {:>{}} {}".format(text, value_width,
@@ -487,7 +490,7 @@ def format_checks(bench: Benchmark, lines: list[str] | None = None, check_too_ma
 
     # Warn if nohz_full+intel_pstate combo if found in cpu_config metadata
     for run in bench._runs:
-        cpu_config = run._metadata.get('cpu_config')
+        cpu_config = cast(str,run._metadata.get('cpu_config'))
         if not cpu_config:
             continue
         if 'nohz_full' in cpu_config and 'intel_pstate' in cpu_config:
@@ -610,9 +613,6 @@ def format_benchmark(bench: Benchmark, checks: bool = True, metadata: bool = Fal
     return lines
 
 
-# FIXME: remove this function?
-def multiline_output(args: argparse.Namespace):
-    return (args.hist or args.stats or args.dump or args.metadata)
 
 
 @contextlib.contextmanager
