@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 from typing import cast
 from collections.abc import Generator
 from typing import TextIO
@@ -10,8 +13,12 @@ import sys
 
 from pyperf._formatter import (format_seconds, format_number,
                                format_datetime)
-from pyperf._metadata import format_metadata as _format_metadata, MetadataType
+from pyperf._metadata import format_metadata as _format_metadata
 from pyperf._bench import Benchmark, Run
+import argparse
+
+if TYPE_CHECKING:
+    from pyperf._metadata import MetadataType
 
 
 def empty_line(lines: list[str]) -> None:
@@ -612,6 +619,9 @@ def format_benchmark(bench: Benchmark, checks: bool = True, metadata: bool = Fal
 
     return lines
 
+# FIXME: remove this function?
+def multiline_output(args: argparse.Namespace):
+    return (args.hist or args.stats or args.dump or args.metadata)
 
 
 
