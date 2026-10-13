@@ -1,21 +1,124 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import cast
-from typing import overload
-from typing import Literal
-from typing import Generic
-from typing import TypeVar
+from typing import cast, overload, Literal, Generic, TypeVar
 from collections.abc import Callable
-
 from pyperf._formatter import (format_number, format_seconds, format_filesize,
                                UNIT_FORMATTERS)
 
-
 METADATA_VALUE_TYPES = (int, str, float)
-MetadataValueType = int | str | float | list[str]
-MetadataType = Mapping[str, MetadataValueType]
 NUMBER_TYPES = (int, float)
 
+
+T = TypeVar("T")
+
+@dataclass(frozen=True)
+class _MetadataInfo(Generic[T]):
+    formatter: Callable[[T], str]
+    types: tuple[type[T], ...]
+    check_value: Callable[[T], bool] | None
+    unit: str | None
+
+if TYPE_CHECKING:
+    from typing_extensions import TypedDict
+
+    MetadataValueType = int | str | float | list[str]
+    class MetadataType(TypedDict, total=False, extra_items=MetadataValueType): # type: ignore[call-arg]  # TODO: PEP 728 extra_items unsupported by mypy
+        # Core
+        perf_version: str
+        date: str
+        name: str
+        unit: str
+        loops: int
+        inner_loops: int
+        duration: float
+        calibrate_loops: int
+        recalibrate_loops: int
+        calibrate_warmups: int
+        recalibrate_warmups: int
+        warmups: int
+        values: int
+        tags: list[str]
+        # Python
+        python_implementation: str
+        python_version: str
+        python_executable: str
+        python_compiler: str
+        python_cflags: str
+        python_config_args: str
+        python_hash_seed: int | str
+        python_gc: str
+        timer: str
+        # System
+        platform: str
+        hostname: str
+        aslr: str
+        boot_time: str
+        uptime: float
+        load_avg_1min: float
+        runnable_threads: int
+        # Memory
+        mem_max_rss: int
+        mem_peak_pagefile_usage: int
+        command_max_rss: int
+        # CPU
+        cpu_count: int
+        cpu_affinity: str
+        cpu_freq: str
+        cpu_config: str
+        cpu_temp: str
+        cpu_model_name: str
+        cpu_machine: str
+        # Command / timeit / hooks
+        command: str
+        hooks: str
+        timeit_stmt: str
+        timeit_setup: str
+        timeit_teardown: str
+        timeit_duplicate: int
+        pystats: str
+        tachyon_extra_opts: str
+        _test_hook: int
+
+    class MetadataRegistryType(TypedDict):
+        loops: _MetadataInfo[int]
+        inner_loops: _MetadataInfo[int]
+        duration: _MetadataInfo[float]
+        uptime: _MetadataInfo[float]
+        load_avg_1min: _MetadataInfo[float | int]
+        mem_max_rss: _MetadataInfo[int]
+        mem_peak_pagefile_usage: _MetadataInfo[int]
+        command_max_rss: _MetadataInfo[int]
+        unit: _MetadataInfo[str]
+        date: _MetadataInfo[str]
+        boot_time: _MetadataInfo[str]
+        calibrate_loops: _MetadataInfo[int]
+        recalibrate_loops: _MetadataInfo[int]
+        calibrate_warmups: _MetadataInfo[int]
+        recalibrate_warmups: _MetadataInfo[int]
+        tags: _MetadataInfo[list[str]]
+
+    MetadataInfoType = (
+        _MetadataInfo[float]
+        | _MetadataInfo[int]
+        | _MetadataInfo[list[str]]
+        | _MetadataInfo[str]
+        | _MetadataInfo[int | float]
+        | _MetadataInfo[MetadataValueType]
+    )
+
+    MetadataByteTypeName = Literal["mem_max_rss", "mem_peak_pagefile_usage", "command_max_rss"]
+    MetadataDatetimeTypeName = Literal["date", "boot_time"]
+    MetadataLoopTypeName = Literal["loops", "inner_loops", "recalibrate_loops"]
+    MetadataWarmupTypeName = Literal["calibrate_warmups", "recalibrate_warmups"]
+    MetadataNumberTypeName = Literal["duration", "uptime", "load_avg_1min"]
+    MetadataTagTypeName = Literal["tags"]
+    MetadataUnitTypeName = Literal["unit"]
+
+    MetadataIntTypeName = MetadataByteTypeName | MetadataLoopTypeName | MetadataWarmupTypeName
+    MetadataStringTypeName = MetadataDatetimeTypeName | MetadataUnitTypeName
 
 def _common_metadata(metadatas: list[MetadataType]) -> MetadataType:
     if not metadatas:
@@ -26,7 +129,7 @@ def _common_metadata(metadatas: list[MetadataType]) -> MetadataType:
         for key in list(metadata):
             if metadata[key] != run_metadata.get(key,None):
                 del metadata[key]
-    return metadata
+    return cast("MetadataType", metadata)
 
 
 def format_generic(value: MetadataValueType) -> str:
@@ -36,7 +139,7 @@ def format_generic(value: MetadataValueType) -> str:
     return value
 
 
-def format_system_load(load: float) -> str:
+def format_system_load(load: float | int) -> str:
     # Format system load read from /proc/loadavg on Linux (ex: 0.12)
     return '%.2f' % load
 
@@ -68,34 +171,16 @@ def format_noop(value: str) -> str:
 
 
 # types: accepted types
-T = TypeVar("T")
-
-@dataclass(frozen=True)
-class _MetadataInfo(Generic[T]):
-    formatter: Callable[[T], str]
-    types: tuple[type[T], ...]
-    check_value: Callable[[T], bool] | None
-    unit: str | None
-
 BYTES = _MetadataInfo(format_filesize, (int,), is_positive, 'byte')
 DATETIME = _MetadataInfo(format_noop, (str,), None, None)
 LOOPS = _MetadataInfo(format_number, (int,), is_strictly_positive, 'integer')
 WARMUPS = _MetadataInfo(format_number, (int,), is_positive, 'integer')
 SECONDS = _MetadataInfo(format_seconds, NUMBER_TYPES, is_positive, 'second')
-TAGS = _MetadataInfo(format_generic, (list,), is_tags, 'tag')
+TAGS: _MetadataInfo[list[str]] = _MetadataInfo(format_generic, (list,), is_tags, 'tag')
 DEFAULT_METADATA_INFO: _MetadataInfo[MetadataValueType] = _MetadataInfo(format_generic, METADATA_VALUE_TYPES, None, None)
 
-MetadataInfoType = (
-    _MetadataInfo[float]
-    | _MetadataInfo[int]
-    | _MetadataInfo[list[str]]
-    | _MetadataInfo[str]
-    | _MetadataInfo[int | float]
-    | _MetadataInfo[MetadataValueType]
-)
-
 # Registry of metadata keys
-METADATA: dict[str, MetadataInfoType] = {
+METADATA: MetadataRegistryType = {
     'loops': LOOPS,
     'inner_loops': LOOPS,
 
@@ -118,17 +203,6 @@ METADATA: dict[str, MetadataInfoType] = {
     'tags': TAGS,
 }
 
-MetadataByteTypeName = Literal["mem_max_rss", "mem_peak_pagefile_usage", "command_max_rss"]
-MetadataDatetimeTypeName = Literal["date", "boot_time"]
-MetadataLoopTypeName = Literal["loops", "inner_loops", "recalibrate_loops"]
-MetadataWarmupTypeName = Literal["calibrate_warmups", "recalibrate_warmups"]
-MetadataNumberTypeName = Literal["duration", "uptime", "load_avg_1min"]
-MetadataTagTypeName = Literal["tags"]
-MetadataUnitTypeName = Literal["unit"]
-
-MetadataIntTypeName = MetadataByteTypeName | MetadataLoopTypeName | MetadataWarmupTypeName
-MetadataStringTypeName = MetadataDatetimeTypeName | MetadataUnitTypeName
-
 @overload
 def get_metadata_info(name: MetadataIntTypeName) -> _MetadataInfo[int]: ...
 
@@ -145,7 +219,7 @@ def get_metadata_info(name: MetadataTagTypeName) -> _MetadataInfo[list[str]]: ..
 def get_metadata_info(name: str) -> MetadataInfoType: ...
 
 def get_metadata_info(name: str) -> MetadataInfoType:
-    return METADATA.get(name, DEFAULT_METADATA_INFO)
+    return cast("MetadataInfoType",METADATA.get(name, DEFAULT_METADATA_INFO))
 
 def check_metadata(name: str, value: MetadataValueType) -> None:
     info = get_metadata_info(name)
@@ -159,7 +233,7 @@ def check_metadata(name: str, value: MetadataValueType) -> None:
                          % (name, type(value).__name__))
 
     if info.check_value is not None:
-        checker = cast(Callable[[MetadataValueType], bool], info.check_value)
+        checker = cast(Callable[["MetadataValueType"], bool], info.check_value)
         if not checker(value):
             raise ValueError("invalid metadata %r value: %r"
                             % (name, value))
@@ -167,7 +241,8 @@ def check_metadata(name: str, value: MetadataValueType) -> None:
 
 def parse_metadata(metadata: MetadataType) -> MetadataType:
     result = {}
-    for name, value in metadata.items():
+    metadata_local = cast(Mapping[str, "MetadataValueType"], metadata)
+    for name, value in metadata_local.items():
         if isinstance(value, str):
             value = value.strip()
             if '\n' in value or '\r' in value:
@@ -177,12 +252,12 @@ def parse_metadata(metadata: MetadataType) -> MetadataType:
                 raise ValueError("metadata %r value is empty" % name)
         check_metadata(name, value)
         result[name] = value
-    return result
+    return cast("MetadataType",result)
 
 
 def format_metadata(name: str, value: MetadataValueType) -> str:
     info = get_metadata_info(name)
-    formatter = cast(Callable[[MetadataValueType], str], info.formatter)
+    formatter = cast(Callable[["MetadataValueType"], str], info.formatter)
     return formatter(value)
 
 
@@ -201,7 +276,7 @@ class Metadata:
 
     def __str__(self) -> str:
         info = get_metadata_info(self._name)
-        formatter = cast(Callable[[MetadataValueType], str], info.formatter)
+        formatter = cast(Callable[["MetadataValueType"], str], info.formatter)
         return formatter(self._value)
 
     def __eq__(self, other: object) -> bool:
@@ -216,6 +291,7 @@ class Metadata:
 
 def _exclude_common_metadata(metadata: MetadataType, common_metadata: MetadataType) -> MetadataType:
     if common_metadata:
-        metadata = {key: value for key, value in metadata.items()
+        new_metadata = {key: value for key, value in metadata.items()
                     if key not in common_metadata}
+        return cast("MetadataType",new_metadata)
     return metadata
