@@ -105,9 +105,9 @@ UNIT_FORMATTERS = {
     'byte': format_filesizes,
     'integer': format_integers,
 }
-_UNIT_TYPE = Literal['second', 'byte', 'integer']
-DEFAULT_UNIT: _UNIT_TYPE = 'second'
-def format_values(unit: _UNIT_TYPE | None, values: Sequence[float | int]) -> tuple[str, ...]:
+UNIT_TYPE = Literal['second', 'byte', 'integer']
+DEFAULT_UNIT: UNIT_TYPE = 'second'
+def format_values(unit: UNIT_TYPE | None, values: Sequence[float | int]) -> tuple[str, ...]:
     if not unit:
         unit = DEFAULT_UNIT
     if unit == 'second':
@@ -118,7 +118,7 @@ def format_values(unit: _UNIT_TYPE | None, values: Sequence[float | int]) -> tup
         return format_integers(cast(Sequence[int],values))
 
 
-def format_value(unit: _UNIT_TYPE, value: float | int) -> str:
+def format_value(unit: UNIT_TYPE, value: float | int) -> str:
     return format_values(unit, (value,))[0]
 
 
