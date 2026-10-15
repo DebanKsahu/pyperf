@@ -1,9 +1,16 @@
-from typing_extensions import override
 import threading
 import time
 
 from pyperf._utils import proc_path
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from typing_extensions import override
+else:
+    from collections.abc import Callable
+    from typing import Any
+    def override(func: Callable[[...], Any]):
+        return func
 
 # Code to parse Linux /proc/%d/smaps files.
 #
