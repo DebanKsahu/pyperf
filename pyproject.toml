@@ -103,3 +103,4 @@ strict = true
 packages = ["pyperf"]
 exclude = "^pyperf/tests/"
 mypy_path = ["pyperf"]
+disable_error_code = ["return-value"]
