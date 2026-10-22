@@ -23,6 +23,7 @@ class _MetadataInfo(Generic[T]):
 
 if TYPE_CHECKING:
     from typing_extensions import TypedDict
+    from pyperf._formatter import UNIT_TYPE
 
     MetadataValueType = int | str | float | list[str]
     class MetadataType(TypedDict, total=False, extra_items=MetadataValueType): # type: ignore[call-arg]  # TODO: PEP 728 extra_items unsupported by mypy
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
         perf_version: str
         date: str
         name: str
-        unit: str
+        unit: UNIT_TYPE
         loops: int
         inner_loops: int
         duration: float
