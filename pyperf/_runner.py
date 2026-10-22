@@ -5,6 +5,7 @@ import os
 import sys
 import time
 from typing import TYPE_CHECKING
+from importlib.metadata import EntryPoints
 
 import pyperf
 from pyperf._cli import (format_benchmark, format_checks,
@@ -66,7 +67,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence, Awaitable
     from typing import TypeVar, Any, ClassVar, Unpack
     from typing_extensions import TypedDict
-    from importlib.metadata import EntryPoints
     from asyncio import AbstractEventLoop
 
     AddCmdlineArgs = Callable[[list[str], RunnerArgs], None]
@@ -309,7 +309,7 @@ class Runner:
                             help='Collect profile data using cProfile '
                                  'and output to the given file.')
 
-        self._custom_hooks = hooks or ()
+        self._custom_hooks = hooks or EntryPoints()
         if not isinstance(self._custom_hooks, (list, tuple)):
             raise RuntimeError("hooks parameter should be list, tuple or None")
 
