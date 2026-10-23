@@ -1,4 +1,3 @@
-from typing import Literal
 from typing import override
 import os
 try:
@@ -46,7 +45,7 @@ class PeakMemoryUsageThread(threading.Thread):
         return self.peak_usage
 
 
-def check_tracking_memory() -> Literal['memory usage is zero'] | None:
+def check_tracking_memory() -> str | None:
     mem_thread = PeakMemoryUsageThread()
     mem_thread.get()
 

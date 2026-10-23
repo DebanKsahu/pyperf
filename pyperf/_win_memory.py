@@ -1,4 +1,3 @@
-from typing import Literal
 from _winapi import GetCurrentProcess # type: ignore[import-not-found, unused-ignore, attr-defined]
 
 try:
@@ -57,7 +56,7 @@ def get_peak_pagefile_usage() -> int:
     return counters.PeakPagefileUsage
 
 
-def check_tracking_memory() -> Literal['memory usage is zero', 'missing ctypes module, unable to get GetProcessMemoryInfo()'] | None:
+def check_tracking_memory() -> str | None:
     if GetProcessMemoryInfo is None:
         return ("missing ctypes module, "
                 "unable to get GetProcessMemoryInfo()")
