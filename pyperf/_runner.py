@@ -4,7 +4,7 @@ import functools
 import os
 import sys
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar, Generic
 from importlib.metadata import EntryPoints
 
 import pyperf
@@ -20,7 +20,7 @@ from pyperf._utils import (MS_WINDOWS, abs_executable,
                            WritePipe, get_python_names,
                            merge_profile_stats)
 from pyperf._system import OS_LINUX
-from pyperf._worker import WorkerProcessTask, WorkerTask
+from pyperf._worker import WorkerProcessTask, WorkerTask, ArgsT
 
 class RunnerArgs(argparse.Namespace):
     rigorous: bool
@@ -68,8 +68,6 @@ if TYPE_CHECKING:
     from typing import TypeVar, Any, ClassVar, Unpack
     from typing_extensions import TypedDict
     from asyncio import AbstractEventLoop
-
-    AddCmdlineArgs = Callable[[list[str], RunnerArgs], None]
 
     class BenchtimeFuncKwargs(TypedDict, closed=True, total=False):
         metadata: MetadataType
@@ -129,8 +127,7 @@ def profiling_wrapper(func: Callable[..., T]) -> tuple[cProfile.Profile, Callabl
 class CLIError(Exception):
     pass
 
-
-class Runner:
+class Runner(Generic[ArgsT]):
     _created: ClassVar[set[int]] = set()
 
     # Default parameters are chosen to have approximately a run of 0.5 second
@@ -138,8 +135,13 @@ class Runner:
     def __init__(self, values: int | None = None, processes: int | None = None,
                  loops: int = 0, min_time: float = 0.1, metadata: MetadataType | None = None,
                  show_name: bool = True,
-                 program_args: Sequence[str] | None = None, add_cmdline_args: AddCmdlineArgs | None = None,
+                 program_args: Sequence[str] | None = None,
+                 add_cmdline_args: Callable[[list[str], ArgsT], None] | None = None,
+                 namespace_type: type[ArgsT] = RunnerArgs, # type: ignore[assignment]
                  _argparser: argparse.ArgumentParser | None = None, warmups: int = 1, hooks: EntryPoints | None = None) -> None:
+
+        # Only to use in ArgumentParser for strong type
+        self.namespace_type = namespace_type
 
         # Watchdog: ensure that only once instance of Runner (or a Runner
         # subclass) is created per process to prevent bad surprises
@@ -173,7 +175,7 @@ class Runner:
         if metadata is not None:
             self.metadata = metadata
         else:
-            self.metadata = {}
+            self.metadata: MetadataType = {}
 
         # Worker task identifier: count how many times _worker() was called,
         # see the --worker-task command line option
@@ -183,7 +185,7 @@ class Runner:
         self._bench_names: set[str] = set()
 
         # result of argparser.parse_args()
-        self.args: RunnerArgs = None # type: ignore[assignment]
+        self.args: ArgsT = None # type: ignore[assignment]
 
         # callback used to prepare command line arguments to spawn a worker
         # child process. The callback is called with prepare(runner.args, cmd).
@@ -439,7 +441,7 @@ class Runner:
             print("ERROR: %s" % str(exc))
             sys.exit(1)
 
-    def _set_args(self, args: RunnerArgs) -> None:
+    def _set_args(self, args: ArgsT) -> None:
         curr_args = self.args
         if curr_args is not None:
             raise RuntimeError("arguments already parsed")
@@ -447,11 +449,11 @@ class Runner:
         self.args = args
         self._process_args()
 
-    def parse_args(self, args: RunnerArgs | None = None) -> RunnerArgs:
+    def parse_args(self, args: ArgsT | None = None) -> ArgsT:
         if self.args is not None and args is None:
             return self.args
 
-        args = self.argparser.parse_args(args, namespace=RunnerArgs())
+        args = self.argparser.parse_args(args, namespace=self.namespace_type())
         self._set_args(args)
         return args
 
@@ -500,7 +502,7 @@ class Runner:
         if not set_highest_priority():
             print("WARNING: unable to increase process priority")
 
-    def _worker(self, task: WorkerTask) -> Benchmark:
+    def _worker(self, task: WorkerTask[ArgsT]) -> Benchmark:
         self._cpu_affinity()
         self._process_priority()
         run = task.create_run()
@@ -521,7 +523,7 @@ class Runner:
 
         return True
 
-    def _main(self, task: WorkerTask) -> Benchmark | None:
+    def _main(self, task: WorkerTask[ArgsT]) -> Benchmark | None:
         if task.name in self._bench_names:
             raise ValueError("duplicated benchmark name: %r" % task.name)
         self._bench_names.add(task.name)
@@ -565,7 +567,7 @@ class Runner:
         else:
             profiler = None
 
-        def task_func(_: WorkerTask, loops: int) -> float:
+        def task_func(_: WorkerTask[ArgsT], loops: int) -> float:
             return time_func(loops, *args)
 
         task = WorkerProcessTask(self, name, task_func, metadata)
@@ -596,7 +598,7 @@ class Runner:
         else:
             profiler = None
 
-        def task_func(_: WorkerTask, loops: int) -> float:
+        def task_func(_: WorkerTask[ArgsT], loops: int) -> float:
             # use fast local variables
             local_timer = time.perf_counter
             local_func = func
@@ -642,7 +644,7 @@ class Runner:
         else:
             profiler = None
 
-        def task_func(_: WorkerTask, loops: int) -> float:
+        def task_func(_: WorkerTask[ArgsT], loops: int) -> float:
             if loops != 1:
                 async def main() -> float:
                     # use fast local variables
