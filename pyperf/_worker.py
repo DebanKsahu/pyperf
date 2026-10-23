@@ -3,7 +3,7 @@ import contextlib
 import statistics
 import sys
 import time
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, TypeVar, Generic
 
 import pyperf
 from pyperf._formatter import (format_number, format_value, format_values,
@@ -13,7 +13,7 @@ from pyperf._utils import MS_WINDOWS, percentile, median_abs_dev
 from pyperf._system import OS_LINUX
 
 if TYPE_CHECKING:
-    from pyperf._runner import Runner
+    from pyperf._runner import Runner, RunnerArgs
     from pyperf._bench import Run
     from pyperf._metadata import MetadataType
     from collections.abc import Callable
@@ -35,10 +35,10 @@ MAX_LOOPS = 2 ** 32
 MAX_WARMUP_VALUES = 300
 WARMUP_SAMPLE_SIZE = 20
 
+ArgsT = TypeVar("ArgsT", bound="RunnerArgs")
 
-class WorkerTask:
-    def __init__(self, runner: Runner, name: str, task_func: Callable[[WorkerTask, int],float], func_metadata: MetadataType | None) -> None:
-        assert runner.args is not None
+class WorkerTask(Generic[ArgsT]):
+    def __init__(self, runner: Runner[ArgsT], name: str, task_func: Callable[[WorkerTask[ArgsT], int],float], func_metadata: MetadataType | None) -> None:
         args = runner.args
 
         name = name.strip()
@@ -188,7 +188,7 @@ class WorkerTask:
         for hook in hook_managers.values():
             hook.teardown(self.metadata)
 
-    def collect_metadata(self) -> pyperf._metadata.MetadataType:
+    def collect_metadata(self) -> MetadataType:
         from pyperf._collect_metadata import collect_metadata
         return collect_metadata(process=False)
 
@@ -418,7 +418,7 @@ class MemoryUsage:
         raise RuntimeError("failed to get the memory peak usage")
 
 
-class WorkerProcessTask(WorkerTask):
+class WorkerProcessTask(WorkerTask[ArgsT]):
     @override
     def compute(self) -> None:
         args = self.args
