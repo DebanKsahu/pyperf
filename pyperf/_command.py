@@ -1,5 +1,4 @@
 from __future__ import annotations
-import functools
 import json
 import os.path
 import subprocess
@@ -8,7 +7,7 @@ from typing import TYPE_CHECKING
 from shlex import quote as shell_quote
 
 from pyperf._utils import popen_communicate
-from pyperf._worker import WorkerTask
+from pyperf._worker import WorkerTask, ArgsT
 
 if TYPE_CHECKING:
     from pyperf._metadata import MetadataType
@@ -38,7 +37,7 @@ def parse_subprocess_data(output: str) -> tuple[float, int, MetadataType]:
     return timing, rss, metadata
 
 
-def bench_command(command: list[str], task: WorkerTask, loops: int) -> float:
+def bench_command(command: list[str], task: WorkerTask[ArgsT], loops: int) -> float:
     path = os.path.dirname(__file__)
     script = os.path.join(path, '_process_time.py')
     run_script = [sys.executable, script]
@@ -65,11 +64,13 @@ def bench_command(command: list[str], task: WorkerTask, loops: int) -> float:
     return timing
 
 
-class BenchCommandTask(WorkerTask):
-    def __init__(self, runner: Runner, name: str, command: list[str]) -> None:
+class BenchCommandTask(WorkerTask[ArgsT]):
+    def __init__(self, runner: Runner[ArgsT], name: str, command: list[str]) -> None:
         command_str = ' '.join(map(shell_quote, command))
         metadata: MetadataType = {'command': command_str}
-        task_func = functools.partial(bench_command, command)
+        def task_func(task: WorkerTask[ArgsT], loops: int) -> float:
+            return bench_command(command, task, loops)
+
         WorkerTask.__init__(self, runner, name, task_func, metadata)
 
     @override
