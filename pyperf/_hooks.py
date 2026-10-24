@@ -2,8 +2,6 @@
 # arbitrary code can by run right before and after the actual internal
 # benchmarking code is run.
 from __future__ import annotations
-from collections.abc import Callable
-
 
 import abc
 import importlib.metadata
@@ -16,13 +14,17 @@ import sys
 import tempfile
 import uuid
 from abc import abstractmethod
-from collections.abc import Generator, Sequence
-from importlib.metadata import EntryPoint, EntryPoints
-from types import TracebackType
-from typing import Any
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pyperf._metadata import MetadataType
+    from collections.abc import Generator, Sequence, Callable
+    from importlib.metadata import EntryPoint, EntryPoints
+    from types import TracebackType
 
 
-def get_hooks() -> importlib.metadata.EntryPoints:
+def get_hooks() -> EntryPoints:
     hook_prefix = "pyperf.hook"
     entry_points = importlib.metadata.entry_points()
     group = entry_points.select(group=hook_prefix)
@@ -66,7 +68,7 @@ class HookBase(abc.ABC):
         """
 
     @abstractmethod
-    def teardown(self, metadata: dict[str, Any]) -> None:
+    def teardown(self, metadata: MetadataType) -> None:
         """
         Called when the hook is completed for a process. May add any information
         collected to the passed-in `metadata` dictionary.
@@ -91,7 +93,7 @@ class _test_hook(HookBase):
     def __init__(self) -> None:
         self._count = 0
 
-    def teardown(self, metadata: dict[str, Any]) -> None:
+    def teardown(self, metadata: MetadataType) -> None:
         metadata["_test_hook"] = self._count
 
     def __enter__(self) -> None:
@@ -114,7 +116,7 @@ class pystats(HookBase):
         self._stats_off()
         self._stats_clear()
 
-    def teardown(self, metadata: dict[str,Any]) -> None:
+    def teardown(self, metadata: MetadataType) -> None:
         metadata["pystats"] = "enabled"
 
     def __enter__(self) -> None:
@@ -160,7 +162,7 @@ class perf_record(HookBase):
     def __exit__(self, _exc_type: type[BaseException] | None, _exc_value: BaseException | None, _traceback: TracebackType | None) -> None:
         self.exec_perf_cmd("disable")
 
-    def teardown(self, metadata: dict[str,Any]) -> None:
+    def teardown(self, metadata: MetadataType) -> None:
         try:
             self.exec_perf_cmd("stop")
             self.perf.wait(timeout=120)
@@ -254,7 +256,7 @@ class tachyon(HookBase):
 
         self._proc = None
 
-    def teardown(self, metadata: dict[str, Any]) -> None:
+    def teardown(self, metadata: MetadataType) -> None:
         self._stop_profiler()
         if self.extra_opts:
             metadata["tachyon_extra_opts"] = self.extra_opts
