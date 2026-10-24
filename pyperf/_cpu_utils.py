@@ -1,10 +1,16 @@
-from typing import Literal
-from collections.abc import Sequence
-import collections
+from __future__ import annotations
+
+from collections import defaultdict
 import os
 import re
 
 from pyperf._utils import sysfs_path, proc_path, read_first_line, USE_PSUTIL
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Literal
+    from collections.abc import Sequence
 
 try:
     if not USE_PSUTIL:
@@ -29,7 +35,7 @@ def get_logical_cpu_count() -> int | None:
     return cpu_count
 
 
-def format_cpu_list(cpus: Sequence[int]) -> str:
+def format_cpu_list(cpus: Sequence[int] | set[int]) -> str:
     if len(cpus)==0:
         return "None"
     cpus = sorted(cpus)
@@ -52,7 +58,7 @@ def format_cpu_list(cpus: Sequence[int]) -> str:
 
 
 def format_cpu_infos(infos: dict[int, str]) -> list[str]:
-    groups = collections.defaultdict(list)
+    groups: defaultdict[str, list[int]] = defaultdict(list)
     for cpu, info in infos.items():
         groups[info].append(cpu)
 
