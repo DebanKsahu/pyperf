@@ -54,7 +54,7 @@ def format_metadata(metadata: MetadataType, prefix: str = '- ', lines: list[str]
     if lines is None:
         lines = []
     for name, value in sorted(metadata.items()):
-        value = _format_metadata(name, value)
+        value = _format_metadata(name, value) # type: ignore[arg-type]
         lines.append("%s%s: %s" % (prefix, name, value))
     return lines
 
@@ -171,7 +171,7 @@ def format_run(bench: Benchmark, run_index: int, run: Run, common_metadata: Meta
             for name, metadata_value in sorted(metadata.items()):
                 if common_metadata and name in common_metadata:
                     continue
-                metadata_value_str = _format_metadata(name, metadata_value)
+                metadata_value_str = _format_metadata(name, metadata_value) # type: ignore[arg-type]
                 lines.append('  %s: %s' % (name, metadata_value_str))
 
     return lines
