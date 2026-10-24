@@ -11,6 +11,7 @@ import sys
 import sysconfig
 import time
 from shutil import which
+from shlex import quote as shell_quote   # noqa
 
 from typing import TYPE_CHECKING, TypeVar
 
