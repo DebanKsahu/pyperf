@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
 import sys
 import subprocess
 
@@ -7,9 +6,11 @@ from pyperf._bench import _load_suite_from_pipe
 from pyperf._cli import format_run
 from pyperf._formatter import format_number
 from pyperf._utils import MS_WINDOWS, create_environ, create_pipe, popen_killer
+from pyperf._worker import ArgsT
+
+from typing import TYPE_CHECKING, Generic
 
 if TYPE_CHECKING:
-    import argparse
     from typing import Literal
     from typing_extensions import TypedDict
     from pyperf._bench import Benchmark, BenchmarkSuite, Run
@@ -30,7 +31,7 @@ MAX_CALIBRATION = 5
 
 
 
-class Manager:
+class Manager(Generic[ArgsT]):
     """
     Manager process which spawns worker processes to:
     - calibrate warmups
@@ -40,10 +41,9 @@ class Manager:
     It uses a state machine with next_run attribute and the choose_next_run()
     method.
     """
-    def __init__(self, runner: Runner, python: str | None = None) -> None:
+    def __init__(self, runner: Runner[ArgsT], python: str | None = None) -> None:
         self.runner = runner
-        assert runner.args is not None
-        self.args: argparse.Namespace = runner.args
+        self.args = runner.args
         if python:
             self.python: str = python
         else:
@@ -100,7 +100,7 @@ class Manager:
 
         return cmd
 
-    def spawn_worker(self, calibrate_loops: int, calibrate_warmups: int) -> BenchmarkSuite | None:
+    def spawn_worker(self, calibrate_loops: int, calibrate_warmups: int) -> BenchmarkSuite[None] | None:
         env = create_environ(self.args.inherit_environ,
                              self.args.locale,
                              self.args.copy_env)
@@ -137,7 +137,7 @@ class Manager:
 
         return _load_suite_from_pipe(bench_json)
 
-    def create_suite(self) -> BenchmarkSuite:
+    def create_suite(self) -> BenchmarkSuite[None]:
         # decide which kind of run must be computed
         if self.next_run == 'loops' and not self.calibrate_loops:
             self.next_run = 'warmups'
@@ -189,7 +189,7 @@ class Manager:
             sys.stdout.flush()
 
     def calibration_done(self) -> None:
-        if self.args.verbose:
+        if self.args.verbose and self.args.warmups:
             print("Calibration: %s, %s"
                   % (format_number(self.args.warmups, 'warmup'),
                      format_number(self.args.loops, 'loop')))
@@ -250,7 +250,7 @@ class Manager:
             self.next_run = 'loops'
         # else: keep action 'values'
 
-    def create_bench(self) -> Benchmark | None:
+    def create_bench(self) -> Benchmark:
         old_warmups = self.args.warmups
         old_loops = self.args.loops
         if self.args.warmups is None:
@@ -266,4 +266,5 @@ class Manager:
         # the next benchmark function if needed
         self.args.warmups = old_warmups
         self.args.loops = old_loops
+        assert self.bench is not None
         return self.bench
