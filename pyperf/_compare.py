@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-
-from typing import TYPE_CHECKING
 from pyperf._cli import display_title, format_result_value
 from pyperf._utils import is_significant, geometric_mean
 
+from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
-    import argparse
-    from pyperf.__main__ import Benchmarks, GroupItem
+    from pyperf.__main__ import Benchmarks, GroupItem, CliCompareArgs
     from pyperf._bench import Benchmark
+    from pyperf._runner import RunnerArgs
     from collections.abc import Sequence, Callable
 
 
@@ -234,7 +234,7 @@ class CompareError(Exception):
 
 
 class CompareSuites:
-    def __init__(self, benchmarks: Benchmarks, args: argparse.Namespace) -> None:
+    def __init__(self, benchmarks: Benchmarks, args: CliCompareArgs) -> None:
         self.benchmarks = benchmarks
 
         self.table = args.table
@@ -249,7 +249,7 @@ class CompareSuites:
             raise CompareError("Benchmark suites have no benchmark in common")
 
         # List of CompareResults
-        self.all_results = []
+        self.all_results: list[CompareResults] = []
         for item in grouped_by_name:
             cmp_benchmarks = item.benchmarks
             results = self.compare_benchmarks(item.name, cmp_benchmarks)
@@ -489,11 +489,11 @@ class CompareSuites:
             self.list_ignored()
 
 
-def compare_suites(benchmarks: Benchmarks, args: argparse.Namespace) -> None:
+def compare_suites(benchmarks: Benchmarks, args: CliCompareArgs) -> None:
     CompareSuites(benchmarks, args).compare()
 
 
-def timeit_compare_benchs(name1: str, bench1: Benchmark, name2: str, bench2: Benchmark, args: argparse.Namespace) -> None:
+def timeit_compare_benchs(name1: str, bench1: Benchmark, name2: str, bench2: Benchmark, args: RunnerArgs) -> None:
     data1 = CompareData(name1, bench1)
     data2 = CompareData(name2, bench2)
     compare = CompareResult(data1, data2)
