@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Self, cast, TypeVar, Literal
-from collections.abc import Iterator
+from types import NoneType
 import enum
-from _io import TextIOWrapper
-from collections.abc import Callable
-from collections.abc import Sequence
 import datetime
 import errno
 import math
@@ -18,11 +14,15 @@ from pyperf._metadata import (NUMBER_TYPES, parse_metadata,
 from pyperf._formatter import DEFAULT_UNIT, format_values
 from pyperf._utils import median_abs_dev, percentile
 
+from typing import TYPE_CHECKING, cast, TypeVar, Generic, overload
+
 if TYPE_CHECKING:
     from pyperf._metadata import MetadataType, MetadataValueType
     from pyperf._formatter import UNIT_TYPE
     from typing_extensions import TypedDict
-    from typing import NotRequired
+    from typing import NotRequired, TextIO, Literal, Self
+    from collections.abc import Callable, Sequence, Iterator
+    from _io import TextIOWrapper
 
     class RunDict(TypedDict):
         warmups: NotRequired[tuple[tuple[int, float | int], ...]]
@@ -148,7 +148,7 @@ class Run:
         if collect_metadata:
             from pyperf._collect_metadata import collect_metadata as collect_func
 
-            metadata2 = cast("MetadataType",collect_func())
+            metadata2 = collect_func()
             if metadata is not None:
                 metadata2.update(metadata)
                 metadata = metadata2
@@ -224,7 +224,7 @@ class Run:
         raise ValueError("run is not a warmup calibration")
 
     def _get_name(self) -> str | None:
-        return cast(str,self._metadata.get('name', None))
+        return self._metadata.get('name')
 
     def get_metadata(self) -> MetadataType:
         return cast("MetadataType",dict(self._metadata))
@@ -301,7 +301,7 @@ class Run:
         warmups: Sequence[tuple[int, float | int]] | None = run_data.get('warmups', None)
         if warmups:
             if version >= (1, 0):
-                warmups = cast(list[tuple[int,float|int]],[tuple(item) for item in warmups])
+                warmups = ([tuple(item) for item in warmups])
             else:
                 inner_loops = metadata.get('inner_loops', 1)
                 warmups = [(loops, raw_value / (loops * inner_loops))
@@ -317,7 +317,7 @@ class Run:
                    collect_metadata=False)
 
     def _extract_metadata(self, name: str) -> Run:
-        value: float | int | list[str] | str | None = cast("MetadataValueType | None", self._metadata.get(name, None))
+        value: float | int | list[str] | str | None = self._metadata.get(name, None)
         if value is None:
             raise KeyError("run has no metadata %r" % name)
 
@@ -335,7 +335,7 @@ class Run:
 
     def _remove_all_metadata(self) -> Run:
         name: str | None = self._metadata.get('name', None)
-        unit: str | None = self._metadata.get('unit', None)
+        unit: UNIT_TYPE | None = self._metadata.get('unit', None)
         metadata: MetadataType = {}
         if name:
             metadata['name'] = name
@@ -365,7 +365,7 @@ class Benchmark:
     _common_metadata: MetadataType | None
     _dates: Literal[_Unset.UNSET] | tuple[datetime.datetime, datetime.datetime] | None
 
-    def __init__(self, runs: list[Run]) -> None:
+    def __init__(self, runs: Sequence[Run]) -> None:
         self._runs: list[Run] = []   # list of Run objects
         self._clear_runs_cache()
 
@@ -384,9 +384,13 @@ class Benchmark:
         return ('<Benchmark %r with %s runs>'
                 % (self.get_name(), len(self._runs)))
 
-    def get_name(self) -> str | None:
+    def get_name(self) -> str:
         run = self._runs[0]
-        return run._get_name()
+        name = run._get_name()
+        if name is None:
+            raise ValueError("A benchmark must have a name: "
+                             "the first run has no name metadata")
+        return name
 
     def _get_common_metadata(self) -> MetadataType:
         if self._common_metadata is None:
@@ -544,7 +548,7 @@ class Benchmark:
 
     def get_unit(self) -> UNIT_TYPE:
         run = self._runs[0]
-        return cast("UNIT_TYPE",run._metadata.get('unit', DEFAULT_UNIT))
+        return run._metadata.get('unit', DEFAULT_UNIT)
 
     def format_values(self, values: Sequence[float | int]) -> tuple[str, ...]:
         unit = self.get_unit()
@@ -630,8 +634,8 @@ class Benchmark:
             raise ValueError("expected 1 benchmark, got %s" % len(benchmarks))
         return benchmarks[0]
 
-    def dump(self, file: str | bytes, compact: bool = True, replace: bool = False) -> None:
-        suite = BenchmarkSuite([self])
+    def dump(self, file: str | bytes | TextIOWrapper, compact: bool = True, replace: bool = False) -> None:
+        suite = BenchmarkSuite([self], None)
         suite.dump(file, compact=compact, replace=replace)
 
     def _replace_runs(self, new_runs: list[Run]) -> None:
@@ -714,20 +718,21 @@ class Benchmark:
         self._replace_runs(new_runs)
         return None
 
+FileNameT = TypeVar("FileNameT", str, bytes, NoneType)
+_LoadFileNameT = TypeVar("_LoadFileNameT", str, bytes, NoneType)
 
-
-class BenchmarkSuite:
-    def __init__(self, benchmarks: list[Benchmark], filename: str | bytes | None = None) -> None:
+class BenchmarkSuite(Generic[FileNameT]):
+    def __init__(self, benchmarks: list[Benchmark], filename: FileNameT = None) -> None:
         if not benchmarks:
             raise ValueError("benchmarks must be a non-empty "
                              "sequence of Benchmark objects")
 
-        self.filename = filename
+        self.filename: FileNameT = filename
         self._benchmarks: list[Benchmark] = []
         for benchmark in benchmarks:
             self.add_benchmark(benchmark)
 
-    def get_benchmark_names(self) -> list[str | None]:
+    def get_benchmark_names(self) -> list[str]:
         return [bench.get_name() for bench in self]
 
     def get_metadata(self) -> MetadataType:
@@ -750,7 +755,7 @@ class BenchmarkSuite:
         else:
             existing.add_runs(benchmark)
 
-    def add_runs(self, result: Benchmark | BenchmarkSuite) -> None:
+    def add_runs(self, result: Benchmark | BenchmarkSuite[FileNameT]) -> None:
         if isinstance(result, Benchmark):
             self._add_benchmark_runs(result)
         elif isinstance(result, BenchmarkSuite):
@@ -760,7 +765,7 @@ class BenchmarkSuite:
             raise TypeError("expect Benchmark or BenchmarkSuite, got %s"
                             % type(result).__name__)
 
-    def get_benchmark(self, name: str | None) -> Benchmark:
+    def get_benchmark(self, name: str) -> Benchmark:
         for bench in self._benchmarks:
             if bench.get_name() == name:
                 return bench
@@ -774,19 +779,18 @@ class BenchmarkSuite:
             raise ValueError("benchmark already part of the suite")
 
         name = benchmark.get_name()
-        if name:
-            try:
-                self.get_benchmark(name)
-            except KeyError:
-                pass
-            else:
-                raise ValueError("the suite has already a benchmark called %r"
-                                 % name)
+        try:
+            self.get_benchmark(name)
+        except KeyError:
+            pass
+        else:
+            raise ValueError("the suite has already a benchmark called %r"
+                                % name)
 
         self._benchmarks.append(benchmark)
 
     @classmethod
-    def _json_load(cls, filename: str | bytes | None, data: BenchmarkSuiteDict) -> Self:
+    def _json_load(cls, filename: _LoadFileNameT, data: BenchmarkSuiteDict) -> BenchmarkSuite[_LoadFileNameT]:
         version = data.get('version')
         version_info = _JSON_MAP_VERSION.get(version)
         if not version_info:
@@ -824,31 +828,50 @@ class BenchmarkSuite:
             return gzip.open(filename, "rt", encoding="utf-8")
         return open(filename, "r", encoding="utf-8")
 
+    @overload
     @classmethod
-    def load(cls, file: str | bytes | TextIOWrapper) -> Self:
-        # Use lazy import to limit imports on 'import pyperf'
+    def load(cls, file: str) -> BenchmarkSuite[str]: ...
+
+    @overload
+    @classmethod
+    def load(cls, file: bytes) -> BenchmarkSuite[bytes]: ...
+
+    @overload
+    @classmethod
+    def load(cls, file: TextIOWrapper) -> BenchmarkSuite[str] | BenchmarkSuite[bytes] | BenchmarkSuite[NoneType]: ...
+
+    @classmethod
+    def load(
+        cls, file: str | bytes | TextIOWrapper
+    ) -> BenchmarkSuite[str] | BenchmarkSuite[bytes] | BenchmarkSuite[NoneType]:
         import json
 
-        filename: str | bytes | None
-        if isinstance(file, (bytes, str)):
+        if isinstance(file, str):
             if file != '-':
-                filename = file
-                fp = cls._load_open(filename)
-                with fp:
+                with cls._load_open(file) as fp:
                     data = json.load(fp)
+                return cls._json_load(file, data)  # Inferred as BenchmarkSuite[str]
             else:
-                filename = '<stdin>'
                 data = json.load(sys.stdin)
-        else:
-            # file is a file object
-            filename = getattr(file, 'name', None)
-            data = json.load(file)
+                return cls._json_load('<stdin>', data)  # Inferred as BenchmarkSuite[str]
 
-        return cls._json_load(filename, data)
+        elif isinstance(file, bytes):
+            with cls._load_open(file) as fp:
+                data = json.load(fp)
+            return cls._json_load(file, data)  # Inferred as BenchmarkSuite[bytes]
+
+        else:
+            name = getattr(file, 'name', None)
+            data = json.load(file)
+            if isinstance(name, str):
+                return cls._json_load(name, data)
+            elif isinstance(name, bytes):
+                return cls._json_load(name, data)
+            else:
+                return cls._json_load(None, data)
 
     @classmethod
-    def loads(cls, string: str) -> Self:
-        # Use lazy import to limit imports on 'import pyperf'
+    def loads(cls, string: str) -> BenchmarkSuite[None]:
         import json
 
         data = json.loads(string)
@@ -893,13 +916,13 @@ class BenchmarkSuite:
             data['metadata'] = metadata
         return data
 
-    def dump(self, file: str | bytes | TextIOWrapper, compact: bool = True, replace: bool = False) -> None:
+    def dump(self, file: str | bytes | TextIO, compact: bool = True, replace: bool = False) -> None:
         # Use lazy import to limit imports on 'import pyperf'
         import json
 
         data = self._as_json()
 
-        def dump(data: BenchmarkSuiteDict, fp: TextIOWrapper, compact: bool) -> None:
+        def dump(data: BenchmarkSuiteDict, fp: TextIO, compact: bool) -> None:
             if compact:
                 json.dump(data, fp, sort_keys=True, separators=(',', ':'))
             else:
@@ -939,7 +962,7 @@ class BenchmarkSuite:
         durations = [benchmark.get_total_duration() for benchmark in self]
         return math.fsum(durations)
 
-    def get_dates(self) -> tuple[datetime.datetime, datetime.datetime | None] | None:
+    def get_dates(self) -> tuple[datetime.datetime, datetime.datetime] | None:
         start = None
         end = None
         for benchmark in self:
@@ -950,13 +973,13 @@ class BenchmarkSuite:
                 start = dates[0]
             if end is None or dates[1] > end:
                 end = dates[1]
-        if start is not None:
+        if start is not None and end is not None:
             return (start, end)
         else:
             return None
 
 
-def add_runs(filename: str, result: Benchmark | BenchmarkSuite) -> None:
+def add_runs(filename: str, result: Benchmark | BenchmarkSuite[str]) -> None:
     if os.path.exists(filename):
         suite = BenchmarkSuite.load(filename)
         suite.add_runs(result)
@@ -965,7 +988,7 @@ def add_runs(filename: str, result: Benchmark | BenchmarkSuite) -> None:
         result.dump(filename)
 
 
-def _load_suite_from_pipe(bench_json: str) -> BenchmarkSuite | None:
+def _load_suite_from_pipe(bench_json: str) -> BenchmarkSuite[None] | None:
     lines = bench_json.split("\n")
     result = None
     for line in lines:
