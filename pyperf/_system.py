@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-from collections.abc import Sequence
 import errno
 import os.path
 import platform
@@ -9,8 +7,6 @@ import re
 import struct
 import subprocess
 import sys
-import argparse
-from typing import cast
 
 from pyperf._cli import display_title
 from pyperf._cpu_utils import (parse_cpu_list,
@@ -20,12 +16,14 @@ from pyperf._cpu_utils import (parse_cpu_list,
 from pyperf._utils import (read_first_line, sysfs_path, proc_path, open_text,
                            popen_communicate)
 
+from typing import TYPE_CHECKING, cast
+
 if TYPE_CHECKING:
     from typing_extensions import override
+    from collections.abc import Sequence
+    from pyperf.__main__ import CliSystemArgs
 else:
-    from collections.abc import Callable
-    from typing import Any
-    def override(func: Callable[[...], Any]):
+    def override(func):
         return func
 
 
@@ -1148,7 +1146,7 @@ class System:
             else:
                 self.error(msg)
 
-    def init(self, args: argparse.Namespace) -> None:
+    def init(self, args: CliSystemArgs) -> None:
         if not self.operations:
             print("WARNING: no operation available for your platform")
             sys.exit()
@@ -1191,7 +1189,7 @@ class System:
                       'configuration to run benchmarks'
                       % os.path.basename(sys.executable))
 
-    def main(self, action: str, args: argparse.Namespace) -> None:
+    def main(self, action: str, args: CliSystemArgs) -> None:
         self.init(args)
         self.run_operations(action)
         self.render_messages(action)
