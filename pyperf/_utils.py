@@ -1,12 +1,7 @@
 from __future__ import annotations
+
 from cProfile import Profile
-from typing import SupportsFloat
-from collections.abc import Mapping
-from collections.abc import Iterable
-from typing import TypeVar
 import subprocess
-from io import TextIOWrapper
-from collections.abc import Sequence
 import contextlib
 import math
 import os
@@ -15,8 +10,15 @@ import statistics
 import sys
 import sysconfig
 import time
-from shlex import quote as shell_quote   # noqa
 from shutil import which
+
+from typing import TYPE_CHECKING, TypeVar
+
+if TYPE_CHECKING:
+    from typing import SupportsFloat, IO, Self
+    from collections.abc import Generator
+    from collections.abc import Mapping, Iterable, Sequence
+    from io import TextIOWrapper
 
 # Currently there is a packaging issue for PEP-703,
 # Until then psutil is disabled as a workaround.
@@ -188,7 +190,7 @@ def python_implementation() -> str:
 def python_has_jit() -> bool:
     implementation_name = python_implementation()
     if implementation_name == 'pypy':
-        return bool(sys.pypy_translation_info["translation.jit"])
+        return getattr(sys, "pypy_translation_info", False)
     elif implementation_name in ['graalpython', 'graalpy']:
         return True
     elif implementation_name == 'cpython':
@@ -203,7 +205,7 @@ def python_has_jit() -> bool:
 _PROC_TYPE = TypeVar("_PROC_TYPE", str, bytes)
 
 @contextlib.contextmanager
-def popen_killer(proc: subprocess.Popen[_PROC_TYPE]):
+def popen_killer(proc: subprocess.Popen[_PROC_TYPE]) -> Generator[None, None, None]:
     try:
         yield
     except:   # noqa: E722
@@ -254,14 +256,14 @@ def abs_executable(python: str) -> str:
         # doesn't.
         path, python = os.path.split(python)
         path = os.path.realpath(path)
-        python = os.path.join(path, python)
+        python_exe: str | None = os.path.join(path, python)
     else:
-        python = which(python)
-    if not python:
+        python_exe = which(python)
+    if not python_exe:
         print("ERROR: Unable to locate the Python executable: %r" % orig_python)
         sys.exit(1)
 
-    return os.path.normpath(python)
+    return os.path.normpath(python_exe)
 
 
 def create_environ(inherit_environ: Iterable[str] | None, locale: bool, copy_all: bool) -> Mapping[str,str] :
@@ -293,16 +295,16 @@ class _Pipe:
     _OPEN_MODE = "r"
 
     def __init__(self, fd: int):
-        self._fd = fd
-        self._file = None
+        self._fd: int | None = fd
+        self._file: IO[str] | None = None
         if MS_WINDOWS:
-            self._handle = msvcrt.get_osfhandle(fd)
+            self._handle = msvcrt.get_osfhandle(fd) # type: ignore[attr-defined]
 
     @property
-    def fd(self):
+    def fd(self) -> int | None:
         return self._fd
 
-    def close(self):
+    def close(self) -> None:
         fd = self._fd
         self._fd = None
         file = self._file
@@ -313,15 +315,17 @@ class _Pipe:
         elif fd is not None:
             os.close(fd)
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
 
 class ReadPipe(_Pipe):
     def open_text(self) -> TextIOWrapper:
+        if self._fd is None:
+            raise ValueError("pipe is closed")
         file = open(self._fd, "r", encoding="utf8")
         self._file = file
         return file
@@ -334,6 +338,8 @@ class ReadPipe(_Pipe):
                 return rfile.read()
 
     def _read_text_timeout(self, timeout: float) -> str:
+        if self.fd is None:
+            raise ValueError("pipe is closed")
         fd = self.fd
         os.set_blocking(fd, False)
 
@@ -342,7 +348,7 @@ class ReadPipe(_Pipe):
         while True:
             if time.monotonic() - start_time > timeout:
                 raise TimeoutError(f"Timed out after {timeout} seconds")
-            ready, _, _ = select.select([fd], [], [], timeout)
+            ready, _, _ = select.select([fd], (), (), timeout)
             if not ready:
                 continue
             try:
@@ -360,23 +366,27 @@ class ReadPipe(_Pipe):
 class WritePipe(_Pipe):
     def to_subprocess(self) -> str:
         if MS_WINDOWS:
-            os.set_handle_inheritable(self._handle, True)
+            os.set_handle_inheritable(self._handle, True) # type: ignore[attr-defined]
             arg = self._handle
         else:
+            if self._fd is None:
+                raise ValueError("pipe is closed")
             os.set_inheritable(self._fd, True)
             arg = self._fd
         return str(arg)
 
     @classmethod
-    def from_subprocess(cls, arg) -> WritePipe:
+    def from_subprocess(cls, arg: int | str) -> WritePipe:
         arg = int(arg)
         if MS_WINDOWS:
-            fd = msvcrt.open_osfhandle(arg, os.O_WRONLY)
+            fd = msvcrt.open_osfhandle(arg, os.O_WRONLY) # type: ignore[attr-defined]
         else:
             fd = arg
         return cls(fd)
 
-    def open_text(self):
+    def open_text(self) -> TextIOWrapper:
+        if self._fd is None:
+            raise ValueError("pipe is closed")
         file = open(self._fd, "w", encoding="utf8")
         self._file = file
         return file
@@ -389,7 +399,7 @@ def create_pipe() -> tuple[ReadPipe, WritePipe]:
     return (rpipe, wpipe)
 
 
-def median_abs_dev(values: Sequence[float | int]):
+def median_abs_dev(values: Sequence[float | int]) -> float:
     # Median Absolute Deviation
     median = statistics.median(values)
     return statistics.median([abs(median - sample) for sample in values])
@@ -417,7 +427,7 @@ def percentile(values: Sequence[float | int], p: float) -> float | int:
 if hasattr(statistics, 'geometric_mean'):
     _geometric_mean = statistics.geometric_mean
 else:
-    def _geometric_mean(data: Sequence[SupportsFloat]) -> float:
+    def _geometric_mean(data: Iterable[SupportsFloat]) -> float:
         # Compute exp(fmean(map(log, data))) using floats
         data = list(map(math.log, data))
 
@@ -434,7 +444,7 @@ def geometric_mean(data: Sequence[SupportsFloat]) -> float:
     return _geometric_mean(data)
 
 
-def merge_profile_stats(profiler: Profile, dst: str):
+def merge_profile_stats(profiler: Profile, dst: str) -> None:
     """
     Save pstats by merging into an existing file.
     """
