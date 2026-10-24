@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-from typing import cast
-from collections.abc import Generator
-from typing import TextIO
-from typing import Any
-from collections.abc import Sequence
+from typing import TYPE_CHECKING, cast
 import contextlib
 import errno
 import os.path
@@ -15,10 +10,18 @@ from pyperf._formatter import (format_seconds, format_number,
                                format_datetime)
 from pyperf._metadata import format_metadata as _format_metadata
 from pyperf._bench import Benchmark, Run
-import argparse
 
 if TYPE_CHECKING:
     from pyperf._metadata import MetadataType
+    from pyperf._runner import RunnerArgs
+    from typing_extensions import TypedDict
+    from collections.abc import Sequence, Generator
+    from typing import TextIO
+
+    class DisplayRunArgDict(TypedDict, closed=True, total=False):
+        quiet: bool
+        verbose: bool
+        raw: bool
 
 
 def empty_line(lines: list[str]) -> None:
@@ -587,7 +590,7 @@ def format_result(bench: Benchmark) -> str:
 
 def format_benchmark(bench: Benchmark, checks: bool = True, metadata: bool = False,
                      dump: bool = False, stats: bool = False, hist: bool = False, show_name: bool = False,
-                     result: bool = True, display_runs_args: dict[str, Any] | None = None, only_checks: bool = False) -> list[str]:
+                     result: bool = True, display_runs_args: DisplayRunArgDict | None = None, only_checks: bool = False) -> list[str]:
     lines = []
 
     if metadata:
@@ -620,7 +623,7 @@ def format_benchmark(bench: Benchmark, checks: bool = True, metadata: bool = Fal
     return lines
 
 # FIXME: remove this function?
-def multiline_output(args: argparse.Namespace):
+def multiline_output(args: RunnerArgs) -> bool:
     return (args.hist or args.stats or args.dump or args.metadata)
 
 
