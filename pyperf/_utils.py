@@ -191,7 +191,7 @@ def python_implementation() -> str:
 def python_has_jit() -> bool:
     implementation_name = python_implementation()
     if implementation_name == 'pypy':
-        return getattr(sys, "pypy_translation_info", False)
+        return getattr(sys, "pypy_translation_info", {}).get("translation.jit", False)
     elif implementation_name in ['graalpython', 'graalpy']:
         return True
     elif implementation_name == 'cpython':
