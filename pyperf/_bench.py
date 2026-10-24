@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from types import NoneType
 import enum
 import datetime
 import errno
@@ -301,7 +300,7 @@ class Run:
         warmups: Sequence[tuple[int, float | int]] | None = run_data.get('warmups', None)
         if warmups:
             if version >= (1, 0):
-                warmups = ([tuple(item) for item in warmups])
+                warmups = [(loops, value) for loops, value in warmups]
             else:
                 inner_loops = metadata.get('inner_loops', 1)
                 warmups = [(loops, raw_value / (loops * inner_loops))
@@ -317,7 +316,7 @@ class Run:
                    collect_metadata=False)
 
     def _extract_metadata(self, name: str) -> Run:
-        value: float | int | list[str] | str | None = self._metadata.get(name, None)
+        value = cast("MetadataValueType | None", self._metadata.get(name, None))
         if value is None:
             raise KeyError("run has no metadata %r" % name)
 
@@ -718,11 +717,12 @@ class Benchmark:
         self._replace_runs(new_runs)
         return None
 
-FileNameT = TypeVar("FileNameT", str, bytes, NoneType)
-_LoadFileNameT = TypeVar("_LoadFileNameT", str, bytes, NoneType)
+FileNameT = TypeVar("FileNameT", str, bytes, None, default=None)
+_LoadFileNameT = TypeVar("_LoadFileNameT", str, bytes, None)
 
 class BenchmarkSuite(Generic[FileNameT]):
-    def __init__(self, benchmarks: list[Benchmark], filename: FileNameT = None) -> None:
+
+    def __init__(self, benchmarks: list[Benchmark], filename: FileNameT) -> None:
         if not benchmarks:
             raise ValueError("benchmarks must be a non-empty "
                              "sequence of Benchmark objects")
@@ -809,7 +809,7 @@ class BenchmarkSuite(Generic[FileNameT]):
         for bench_data in benchmarks_json:
             benchmark = Benchmark._json_load(version_info, bench_data, metadata)
             benchmarks.append(benchmark)
-        suite = cls(benchmarks, filename=filename)
+        suite = BenchmarkSuite(benchmarks, filename=filename)
 
         if not suite:
             raise ValueError("the file doesn't contain any benchmark")
@@ -838,27 +838,27 @@ class BenchmarkSuite(Generic[FileNameT]):
 
     @overload
     @classmethod
-    def load(cls, file: TextIOWrapper) -> BenchmarkSuite[str] | BenchmarkSuite[bytes] | BenchmarkSuite[NoneType]: ...
+    def load(cls, file: TextIOWrapper) -> BenchmarkSuite[str] | BenchmarkSuite[bytes] | BenchmarkSuite[None]: ...
 
     @classmethod
     def load(
         cls, file: str | bytes | TextIOWrapper
-    ) -> BenchmarkSuite[str] | BenchmarkSuite[bytes] | BenchmarkSuite[NoneType]:
+    ) -> BenchmarkSuite[str] | BenchmarkSuite[bytes] | BenchmarkSuite[None]:
         import json
 
         if isinstance(file, str):
             if file != '-':
                 with cls._load_open(file) as fp:
                     data = json.load(fp)
-                return cls._json_load(file, data)  # Inferred as BenchmarkSuite[str]
+                return cls._json_load(file, data)
             else:
                 data = json.load(sys.stdin)
-                return cls._json_load('<stdin>', data)  # Inferred as BenchmarkSuite[str]
+                return cls._json_load('<stdin>', data)
 
         elif isinstance(file, bytes):
             with cls._load_open(file) as fp:
                 data = json.load(fp)
-            return cls._json_load(file, data)  # Inferred as BenchmarkSuite[bytes]
+            return cls._json_load(file, data)
 
         else:
             name = getattr(file, 'name', None)
