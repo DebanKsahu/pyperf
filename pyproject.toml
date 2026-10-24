@@ -96,11 +96,11 @@ max-complexity = 31
 required-version = ">=1.3.0,<=1.3.0"
 preset = "strict"
 project-includes = ["pyperf"]
-project-excludes = ["pyperf/tests"]
+project-excludes = ["pyperf/tests", "doc/"]
 
 [tool.mypy]
 strict = true
 packages = ["pyperf"]
-exclude = "^pyperf/tests/"
+exclude = "^pyperf/tests/|^doc/"
 mypy_path = ["pyperf"]
 disable_error_code = ["return-value"]
