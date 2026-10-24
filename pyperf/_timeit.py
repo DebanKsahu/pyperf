@@ -5,6 +5,7 @@ import time
 import traceback
 
 import pyperf
+from pyperf._runner import RunnerArgs
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -12,7 +13,15 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from pyperf._runner import Runner, BenchtimeFuncKwargs
     from pyperf._metadata import MetadataType
+    from pyperf._worker import ArgsT
 
+class TimeitArgs(RunnerArgs):
+    name: str
+    setup: list[str]
+    teardown: list[str]
+    inner_loops: int | None
+    duplicate: int | None
+    stmt: list[str]
 
 PYPY = (pyperf.python_implementation() == 'pypy')
 DUMMY_SRC_NAME = "<timeit-src>"
@@ -194,7 +203,7 @@ def display_error(timer: Timer, stmt: Sequence[str], setup: Sequence[str], teard
     traceback.print_exc()
 
 
-def bench_timeit(runner: Runner, name: str, stmt: str | Sequence[str], setup: str | Sequence[str], teardown: str | Sequence[str],
+def bench_timeit(runner: Runner[ArgsT], name: str, stmt: str | Sequence[str], setup: str | Sequence[str], teardown: str | Sequence[str],
                  inner_loops: int | None = None, duplicate: int | None = None,
                  func_metadata: MetadataType | None = None, globals: dict[str, Any] | None = None) -> None:
 

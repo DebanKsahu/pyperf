@@ -4,13 +4,12 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from pyperf._runner import Runner
-from pyperf._timeit import bench_timeit
+from pyperf._timeit import bench_timeit, TimeitArgs
 
 if TYPE_CHECKING:
     from argparse import ArgumentParser
-    from pyperf._runner import Runner, RunnerArgs, AddCmdlineArgs
     from pyperf._metadata import MetadataType
-    from collections.abc import Sequence
+    from collections.abc import Sequence, Callable
     from typing_extensions import override
     from importlib.metadata import EntryPoints
 
@@ -21,7 +20,8 @@ else:
 DEFAULT_NAME = 'timeit'
 
 
-def add_cmdline_args_default(cmd: list[str], args: RunnerArgs) -> None:
+
+def add_cmdline_args_default(cmd: list[str], args: TimeitArgs) -> None:
     cmd.extend(('--name', args.name))
     if args.inner_loops:
         cmd.extend(('--inner-loops', str(args.inner_loops)))
@@ -34,7 +34,7 @@ def add_cmdline_args_default(cmd: list[str], args: RunnerArgs) -> None:
     cmd.extend(args.stmt)
 
 
-class TimeitRunner(Runner):
+class TimeitRunner(Runner[TimeitArgs]):
     def __init__(
         self,
         values: int | None = None,
@@ -44,17 +44,18 @@ class TimeitRunner(Runner):
         metadata: MetadataType | None = None,
         show_name: bool = True,
         program_args: Sequence[str] | None = None,
-        add_cmdline_args: AddCmdlineArgs | None = None,
+        add_cmdline_args: Callable[[list[str], TimeitArgs], None] | None = None,
         _argparser: ArgumentParser | None = None,
         warmups: int = 1,
         hooks: EntryPoints | None = None,
         ) -> None:
+
         if program_args is None:
             program_args = ('-m', 'pyperf', 'timeit')
         if add_cmdline_args is None:
             add_cmdline_args = add_cmdline_args_default
-        Runner.__init__(
-            self,
+
+        super().__init__(
             values=values,
             processes=processes,
             loops=loops,
@@ -63,6 +64,7 @@ class TimeitRunner(Runner):
             show_name=show_name,
             program_args=program_args,
             add_cmdline_args=add_cmdline_args,
+            namespace_type=TimeitArgs,
             _argparser=_argparser,
             warmups=warmups,
             hooks=hooks,
