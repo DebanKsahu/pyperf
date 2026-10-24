@@ -118,7 +118,7 @@ def format_values(unit: UNIT_TYPE | None, values: Sequence[float | int]) -> tupl
         return format_integers(cast(Sequence[int],values))
 
 
-def format_value(unit: UNIT_TYPE, value: float | int) -> str:
+def format_value(unit: UNIT_TYPE | None, value: float | int) -> str:
     return format_values(unit, (value,))[0]
 
 
