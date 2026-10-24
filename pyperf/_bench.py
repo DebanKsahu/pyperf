@@ -717,7 +717,7 @@ class Benchmark:
         self._replace_runs(new_runs)
         return None
 
-FileNameT = TypeVar("FileNameT", str, bytes, None, default=None)
+FileNameT = TypeVar("FileNameT", str, bytes, None)
 _LoadFileNameT = TypeVar("_LoadFileNameT", str, bytes, None)
 
 class BenchmarkSuite(Generic[FileNameT]):
