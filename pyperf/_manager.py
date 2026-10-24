@@ -119,6 +119,8 @@ class Manager(Generic[ArgsT]):
                     # http://bugs.python.org/issue19764
                     kw['close_fds'] = False
                 else:
+                    if wpipe.fd is None:
+                        raise ValueError("pipe is closed")
                     kw['pass_fds'] = [wpipe.fd]
 
                 proc = subprocess.Popen(cmd, env=env, **kw)
