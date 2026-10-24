@@ -173,9 +173,9 @@ class Runner(Generic[ArgsT]):
                 processes = 20
 
         if metadata is not None:
-            self.metadata = metadata
+            self.metadata: MetadataType = metadata
         else:
-            self.metadata: MetadataType = {}
+            self.metadata = {}
 
         # Worker task identifier: count how many times _worker() was called,
         # see the --worker-task command line option
