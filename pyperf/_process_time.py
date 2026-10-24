@@ -15,13 +15,7 @@ If resource.getrusage() is available: compute the maximum RSS memory in bytes
 per process and writes it into stdout as a second line.
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from _typeshed import SupportsWrite
-    from pyperf._hooks import HookBase
-from typing import Any
-from typing_extensions import TypedDict
 from io import TextIOWrapper
 import contextlib
 import json
@@ -36,10 +30,18 @@ try:
 except ImportError:
     resource = None # type: ignore[assignment]
 
-class PopenKwargs(TypedDict, total=False, closed=True):
-    stdin: int | TextIOWrapper
-    stdout: int | TextIOWrapper
-    stderr: int
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from _typeshed import SupportsWrite
+    from pyperf._hooks import HookBase
+    from pyperf._metadata import MetadataType
+    from typing_extensions import TypedDict
+
+    class PopenKwargs(TypedDict, total=False, closed=True):
+        stdin: int | TextIOWrapper
+        stdout: int | TextIOWrapper
+        stderr: int
 
 def get_max_rss(*, children: bool) -> int:
     if resource is not None:
@@ -106,7 +108,7 @@ def bench_process(loops: int, args: list[str], kw: PopenKwargs, profile_filename
     return (dt, max_rss)
 
 
-def load_hooks(metadata: dict[str, Any]) -> dict[str, HookBase]:
+def load_hooks(metadata: MetadataType) -> dict[str, HookBase]:
     hook_names = []
     while "--hook" in sys.argv:
         hook_idx = sys.argv.index("--hook")
@@ -127,7 +129,7 @@ def load_hooks(metadata: dict[str, Any]) -> dict[str, HookBase]:
     return hook_managers
 
 
-def write_data(dt: float, max_rss: int, metadata: dict[str,Any], out: SupportsWrite[str]=sys.stdout) -> None:
+def write_data(dt: float, max_rss: int, metadata: MetadataType, out: SupportsWrite[str]=sys.stdout) -> None:
     # Write the data that is communicated back to the main orchestration process.
     # It is three lines containing:
     #    - The runtime (in seconds)
@@ -159,7 +161,7 @@ def main() -> None:
     else:
         profile_filename = None
 
-    metadata: dict[str, Any] = {}
+    metadata: MetadataType = {}
     hook_managers = load_hooks(metadata)
 
     loops = int(sys.argv[1])
