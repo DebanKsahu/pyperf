@@ -1,6 +1,4 @@
 from __future__ import annotations
-from types import ModuleType
-from typing import TYPE_CHECKING
 import datetime
 import os
 import platform
@@ -21,6 +19,14 @@ from pyperf._utils import (MS_WINDOWS,
 if MS_WINDOWS:
     from pyperf._win_memory import check_tracking_memory, get_peak_pagefile_usage
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pyperf._metadata import MetadataType
+    from pyperf.__main__ import CliCollectMetadataArgs
+    from collections.abc import Generator, Sequence
+    from types import ModuleType
+
 resource: ModuleType | None
 try:
     import resource
@@ -36,11 +42,6 @@ try:
         import psutil
 except ImportError:
     psutil = None
-
-if TYPE_CHECKING:
-    from pyperf._metadata import MetadataType
-    from collections.abc import Generator, Sequence
-    import argparse
 
 def normalize_text(text: object) -> str:
     text = str(text)
@@ -430,13 +431,13 @@ def collect_metadata(process: bool = True) -> MetadataType:
     return metadata
 
 
-def cmd_collect_metadata(args: argparse.Namespace) -> None:
+def cmd_collect_metadata(args: CliCollectMetadataArgs) -> None:
     filename = args.output
     if filename and os.path.exists(filename):
         print("ERROR: The JSON file %r already exists" % filename)
         sys.exit(1)
 
-    cpus = args.affinity
+    cpus: list[int] | None = args.affinity
     if cpus:
         if not set_cpu_affinity(cpus):
             print("ERROR: failed to set the CPU affinity")
